@@ -105,20 +105,21 @@ letFunExpr :: Parser TypedExpr
 letFunExpr = do
   reserved "let"
   funName <- identifier
-  argName <- identifier
+  argNames <- some identifier
   reserved ":"
-  argTyp <- parseType
-  reserved "->"
+  argTyps <- parens $ some parseType
+  _ <- symbol "->"
   returnType <- parseType
-  reserved "="
+  _ <- symbol "="
   funBody <- parseExpr
   reserved "in"
-  LetFun funName argName argTyp funBody returnType <$> parseExpr
+  LetFun funName argNames argTyps funBody returnType <$> parseExpr
 
 callExpr :: Parser TypedExpr
 callExpr = do
   f <- identifier
-  Call (Var f) <$> expr
+  args <- some parseExpr
+  return (Call (Var f) args)
 
 parseExprTest :: Text -> IO ()
 parseExprTest = parseTest (parseExpr <* eof)
