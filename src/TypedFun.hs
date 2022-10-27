@@ -1,6 +1,7 @@
+
 module TypedFun (evaluate, typeCheck) where
 
-import Expr (Env, Typ (..), TypedExpr (..))
+import Expr (Env, Typ (..), TypedExpr (..), FunDef(..))
 
 lookup' :: Env v -> String -> v
 lookup' env x = case lookup x env of
@@ -10,43 +11,43 @@ lookup' env x = case lookup x env of
 data Value
   = Int Integer
   | Closure String [String] TypedExpr (Env Value)
+  deriving (Show)
 
-eval :: TypedExpr -> Env Value -> Integer
-eval (CstI i) _ = i
-eval (CstB b) _ = if b then 1 else 0
-eval (Var x) env = case lookup' env x of
-  Int i -> i
-  _ -> error "eval Var"
+eval :: TypedExpr -> Env Value -> Value
+eval (CstI i) _ = Int i
+eval (CstB b) _ = Int $ if b then 1 else 0
+eval (Var x) env = lookup' env x
+eval (Prim op e1 e2) env = Int $ case (op, eval e1 env, eval e2 env) of
+  ("+", Int i1, Int i2) -> i1 + i2
+  ("-", Int i1, Int i2) -> i1 - i2
+  ("*", Int i1, Int i2) -> i1 * i2
+  ("=", Int i1, Int i2) -> if i1 == i2 then 1 else 0
+  ("<", Int i1, Int i2) -> if i1 < i2 then 1 else 0
+  _ -> error "unknown primitive or wrong type"
 eval (Let x eRhs letBody) env =
-  let xVal = Int (eval eRhs env)
+  let xVal = eval eRhs env
       bodyEnv = (x, xVal) : env
    in eval letBody bodyEnv
-eval (Prim op e1 e2) env = case (op, eval e1 env, eval e2 env) of
-  ("+", i1, i2) -> i1 + i2
-  ("-", i1, i2) -> i1 - i2
-  ("*", i1, i2) -> i1 * i2
-  ("=", i1, i2) -> if i1 == i2 then 1 else 0
-  ("<", i1, i2) -> if i1 < i2 then 1 else 0
-  _ -> error "eval Prim"
 eval (If e1 e2 e3) env =
-  if eval e1 env /= 0
-    then eval e2 env
-    else eval e3 env
-eval (LetFun f xs _ fBody _ letBody) env =
-  let bodyEnv = (f, Closure f xs fBody env) : env
-   in eval letBody bodyEnv
-eval (Call (Var fName) eArgs) env =
-  let fClosure = lookup' env fName
+  case eval e1 env of
+    Int 0 -> eval e3 env
+    Int _ -> eval e2 env
+    _ -> error "eval If"
+eval (LetFun funDefs letBody) env =
+  let envWithDefs = map (\(FunDef f xs _ fBody _) -> (f, Closure f xs fBody envWithDefs)) funDefs ++ env
+   in eval letBody envWithDefs
+eval (Call eFun eArgs) env =
+  let fClosure = eval eFun env
    in case fClosure of
-        Closure f xs fBody fDeclEnv ->
-          let xVals = map (\arg -> Int (eval arg env)) eArgs
-              argEnv = zip xs xVals
-              fBodyEnv = argEnv ++ (f, fClosure) : fDeclEnv
-           in eval fBody fBodyEnv
-        _ -> error "eval Call: not a function"
-eval (Call _ _) _ = error "eval Call: not first-order function"
+      Closure f xs fBody fDeclEnv ->
+        let xVals = map (`eval` env) eArgs
+            argEnv = zip xs xVals
+            fBodyEnv = argEnv ++ (f, fClosure) : fDeclEnv
+            -- fBodyEnv = argEnv ++ fDeclEnv
+         in eval fBody fBodyEnv
+      _ -> error "eval Call: not a function"
 
-evaluate :: TypedExpr -> Integer
+evaluate :: TypedExpr -> Value
 evaluate e = eval e []
 
 typ :: TypedExpr -> Env Typ -> Typ
@@ -75,17 +76,16 @@ typ (If e1 e2 e3) env =
    in if t1 == TypB && t2 == t3
         then t2
         else error "type error in If"
-typ (LetFun f xs xTyps fBody rTyp letBody) env =
-  if length xs /= length xTyps
+typ (LetFun funDefs letBody) env =
+  if any (\(FunDef _ xs xTyps _ _) -> length xs /= length xTyps) funDefs
     then error "Count"
     else
-      let fTyp = TypF xTyps rTyp
-          argTyps = zip xs xTyps
-          fBodyEnv = argTyps ++ (f, fTyp) : env
-          letBodyEnv = (f, fTyp) : env
-       in if typ fBody fBodyEnv == rTyp
-            then typ letBody letBodyEnv
-            else error "type error in function body"
+      let fTypsByf = map (\(FunDef f _ xTyps _ rTyp) -> (f, TypF xTyps rTyp)) funDefs
+          fBodiesAndEnvsAndRTyps = map (\(FunDef _ xs xTyps fBody rTyp) -> (fBody, zip xs xTyps ++ fTypsByf ++ env, rTyp)) funDefs
+          letBodyEnv = fTypsByf ++ env
+       in if all (\(fBody, fBodyEnv, rTyp) -> typ fBody fBodyEnv == rTyp) fBodiesAndEnvsAndRTyps
+        then typ letBody letBodyEnv
+        else error "type error in function body"
 typ (Call (Var fName) eArgs) env = case lookup' env fName of
   (TypF xTyps rTyp) ->
     if all (\t -> typ (fst t) env == snd t) (zip eArgs xTyps)
