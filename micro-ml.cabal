@@ -25,10 +25,11 @@ source-repository head
 
 library
   exposed-modules:
+      Eval
       Expr
       Lib
       Parser
-      TypedFun
+      Typing
   other-modules:
       Paths_micro_ml
   hs-source-dirs:
@@ -44,8 +45,6 @@ library
 
 executable micro-ml-exe
   main-is: Main.hs
-  other-modules:
-      Paths_micro_ml
   hs-source-dirs:
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N

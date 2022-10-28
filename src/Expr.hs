@@ -1,6 +1,11 @@
-module Expr (Env, Typ (..), TypedExpr (..), FunDef(..)) where
+module Expr (Env, lookup', Typ (..), TypedExpr (..), FunDef(..)) where
 
 type Env v = [(String, v)]
+
+lookup' :: Env v -> String -> v
+lookup' env x = case lookup x env of
+  Just v -> v
+  Nothing -> error ("unbound variable " ++ x)
 
 data Typ
   = TypI
