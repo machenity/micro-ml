@@ -56,7 +56,7 @@ executables:
     - text
     when:
     - condition: false
-      other_modules: Paths_micro_ml
+      other-modules: Paths_micro_ml
 
 tests:
   micro-ml-test:
