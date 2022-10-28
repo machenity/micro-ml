@@ -5,7 +5,7 @@ module Parser (parseExpr, parseCode, parseExprTest) where
 import Control.Monad.Combinators.Expr (Operator (InfixL), makeExprParser)
 import Data.Text (Text)
 import Data.Void (Void)
-import Expr (Typ (TypB, TypI), TypedExpr (..))
+import Expr (Typ (TypB, TypI), TypedExpr (..), FunDef(..))
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -104,16 +104,21 @@ letExpr = do
 letFunExpr :: Parser TypedExpr
 letFunExpr = do
   reserved "let"
+  funDefs <- funDef `sepBy1` symbol ";"
+  reserved "in"
+  LetFun funDefs <$> parseExpr
+
+funDef :: Parser FunDef
+funDef = do
   funName <- identifier
   argNames <- some identifier
-  reserved ":"
-  argTyps <- parens $ some parseType
+  _ <- symbol ":"
+  argTypes <- parens $ some parseType
   _ <- symbol "->"
   returnType <- parseType
   _ <- symbol "="
   funBody <- parseExpr
-  reserved "in"
-  LetFun funName argNames argTyps funBody returnType <$> parseExpr
+  return $ FunDef funName argNames argTypes funBody returnType
 
 callExpr :: Parser TypedExpr
 callExpr = do
